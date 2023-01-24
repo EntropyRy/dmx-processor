@@ -154,6 +154,7 @@ void usart3_isr(void)
 	rx_packet_position = rx_packet_position_un_volatiled;
 	/* PACKET RECEPTION END */
 
+#if 0
 	/* PACKET TRANSMISSION BEGIN */
 	bool tx_packet_available_un_volatiled = tx_packet_available;
 	size_t tx_packet_position_un_volatiled = tx_packet_position;
@@ -175,6 +176,7 @@ void usart3_isr(void)
 	tx_packet_available = tx_packet_available_un_volatiled;
 	tx_packet_position = tx_packet_position_un_volatiled;
 	/* PACKET TRANSMISSION END */
+#endif
 }
 
 
@@ -195,10 +197,19 @@ void dmx_start_transmitting(void)
 	// Then change it back to UART mode
 	gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO10);
 
+#if 0
 	// Tell the interrupt handler it can start transmitting
 	tx_packet_position = 0;
 	tx_packet_available = 1;
 	usart_enable_tx_interrupt(USART3);
+#else
+	// Ok, let's forget about interrupt based transmissions for now.
+	// Let's be stupidly inefficient and busy-wait the whole transmission here.
+	for (int i = 0; i < TX_PACKET_LEN; i++) {
+		usart_send_blocking(USART3, tx_packet[i]);
+	}
+	tx_packet_available = 0;
+#endif
 }
 
 
