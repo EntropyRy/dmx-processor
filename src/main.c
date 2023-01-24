@@ -12,6 +12,7 @@
 // https://www.st.com/resource/en/reference_manual/rm0008-stm32f101xx-stm32f102xx-stm32f103xx-stm32f105xx-and-stm32f107xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
 
 
+
 int main(void)
 {
 	rcc_clock_setup_in_hse_8mhz_out_72mhz();
@@ -46,7 +47,11 @@ int main(void)
 	systick_counter_enable();
 	nvic_enable_irq(NVIC_USART3_IRQ);
 
-	for (;;);
+	for (;;) {
+
+
+
+	};
 }
 
 
@@ -70,9 +75,16 @@ struct rxdata {
 volatile struct rxdata rxbuf[RXBUF_LEN];
 volatile int rxbuf_i = 0;
 
+#define RX_PACKET_LEN 7
+volatile int rx_packet_position = 0; // Where reader is during DMX-packet reading
+volatile uint8_t rx_packet[RX_PACKET_LEN];
+volatile bool DMX_packet_recieved = false;
+
 void usart3_isr(void)
 {
-	short flag_fe = usart_get_flag(USART3, USART_SR_FE);
+
+	/* DEBUG START */
+	bool flag_fe = usart_get_flag(USART3, USART_SR_FE);
 	short flag_rxne = usart_get_flag(USART3, USART_SR_RXNE);
 	short data = 0;
 	if (flag_rxne) {
@@ -85,4 +97,19 @@ void usart3_isr(void)
 	};
 	if (rxbuf_i >= RXBUF_LEN)
 		rxbuf_i = 0;
+	/* DEBUG END*/
+	int rx_packet_position_un_volatiled = rx_packet_position;
+	if (flag_fe){
+		rx_packet_position_un_volatiled = 0;
+	} else {
+		if( rx_packet_position_un_volatiled < RX_PACKET_LEN) {
+			rx_packet[rx_packet_position_un_volatiled] = data;
+			rx_packet_position_un_volatiled += 1; // increment the 
+			if (rx_packet_position_un_volatiled == RX_PACKET_LEN){
+				DMX_packet_recieved = true;
+			} 
+		}
+	}
+
+	rx_packet_position = rx_packet_position_un_volatiled;
 }
