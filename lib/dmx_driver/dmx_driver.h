@@ -10,7 +10,7 @@
 // Maximum length of a received packet.
 // This determines the size of receive buffers.
 #define DMXDRV_RX_MAX_LEN 7
-// Maximum length of a transmitter packet
+// Maximum length of a transmitted packet.
 // This determines the size of transmit buffers.
 #define DMXDRV_TX_MAX_LEN 512
 
@@ -18,11 +18,11 @@
 struct dmxdrv_settings {
 	// USART peripheral identifier
 	uint32_t usart;
-	// GPIO port identifier of transmit pin
-	uint32_t rx_port;
-	// GPIO port identifier of driver enable pin
-	uint32_t tx_port;
 	// GPIO port identifier of receive pin
+	uint32_t rx_port;
+	// GPIO port identifier of transmit pin
+	uint32_t tx_port;
+	// GPIO port identifier of driver enable pin
 	uint32_t de_port;
 	// GPIO pin identifier of receive pin
 	uint16_t rx_pin;
@@ -37,11 +37,13 @@ typedef struct dmxdrv *dmxdrv_t;
 
 // Initialize a DMX driver instance with the given settings.
 //
-// Clocks of the given GPIO and UART peripherals should be initialized
+// Clocks of the given GPIO and UART peripherals should be enabled
 // before calling dmxdrv_init.
 //
 // USART IRQ should be enabled using nvic_enable_irq after calling
 // dmxdrv_init and when it is safe to enable interrupts.
+// This makes sure the ISR will not get called before dmxdrv_init
+// has finished and the return value has been stored.
 dmxdrv_t dmxdrv_init(const struct dmxdrv_settings *settings);
 
 // Handle interrupts of the USART peripheral used by the DMX driver.

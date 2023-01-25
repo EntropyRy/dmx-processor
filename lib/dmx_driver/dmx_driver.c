@@ -24,10 +24,10 @@ struct dmxdrv {
 	// the received packet. When main loop is done with the packet,
 	// it sets rx_packet_in_buffer back to false, telling the
 	// ISR it can use it for the next packet.
-	bool rx_packet_in_buffer;
+	volatile bool rx_packet_in_buffer;
 
 	// Add when interrupt-driven TX is implemented
-	//bool tx_packet_in_buffer;
+	//volatile bool tx_packet_in_buffer;
 
 	struct dmxdrv_settings settings;
 
@@ -48,13 +48,13 @@ dmxdrv_t dmxdrv_init(const struct dmxdrv_settings *settings)
 
 	// DMX RX pin
 	gpio_set(
-			dmxdrv->settings.rx_port,
-			dmxdrv->settings.rx_pin);
+		dmxdrv->settings.rx_port,
+		dmxdrv->settings.rx_pin);
 	gpio_set_mode(
-			dmxdrv->settings.rx_port,
-			GPIO_MODE_INPUT,
-			GPIO_CNF_INPUT_PULL_UPDOWN,
-			dmxdrv->settings.rx_pin);
+		dmxdrv->settings.rx_port,
+		GPIO_MODE_INPUT,
+		GPIO_CNF_INPUT_PULL_UPDOWN,
+		dmxdrv->settings.rx_pin);
 	// DMX TX pin
 	gpio_set(
 		dmxdrv->settings.tx_port,
@@ -186,13 +186,16 @@ static void busywait(uint32_t cycles)
 
 void dmxdrv_start_tx(dmxdrv_t dmxdrv)
 {
+	busywait(10000); // make sure there's some idle in between, not sure if necessary
+
+	gpio_set(dmxdrv->settings.de_port, dmxdrv->settings.de_pin);
+
 	// Send break condition by changing the TX pin to a normal GPIO output.
 	gpio_set_mode(
 		dmxdrv->settings.tx_port,
 		GPIO_MODE_OUTPUT_2_MHZ,
 		GPIO_CNF_OUTPUT_PUSHPULL,
 		dmxdrv->settings.tx_pin);
-	busywait(10000); // make sure there's some idle in between, not sure if necessary
 	gpio_clear(dmxdrv->settings.tx_port, dmxdrv->settings.tx_pin);
 	busywait(10000);
 	// Mark after break
@@ -210,4 +213,8 @@ void dmxdrv_start_tx(dmxdrv_t dmxdrv)
 	for (int i = 0; i < DMXDRV_TX_MAX_LEN; i++) {
 		usart_send_blocking(dmxdrv->settings.usart, dmxdrv->tx_packet[i]);
 	}
+
+	// Make sure everything is sent before disabling the transmitter
+	usart_wait_send_ready(dmxdrv->settings.usart);
+	gpio_clear(dmxdrv->settings.de_port, dmxdrv->settings.de_pin);
 }
