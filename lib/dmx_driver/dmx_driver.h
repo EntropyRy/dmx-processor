@@ -1,4 +1,17 @@
 // DMX driver for STM32F1 series using libopencm3
+//
+//   Thread safety/reentrancy/concurrency considerations:
+//   ---------------------------------------------------
+// Thread safety between calls to (most) dmxdrv functions is not guaranteed.
+// Recommended approach is to call them only from your main loop
+// (or more generally, from only one task in case of a RTOS, or from only
+// one interrupt priority level in case of fully interrupt-driven code).
+// For example, calling dmxdrv_tx_buffer_available while dmxdrv_start_tx
+// is executing in another context may not return meaningful results.
+//
+// An exception is, of course, the dmxdrv_usart_isr function, which is
+// meant to be called from a high priority interrupt. It can safely happen
+// at any moment, as long as the driver instance has been initialized.
 
 #ifndef DMX_DRIVER_H
 #define DMX_DRIVER_H

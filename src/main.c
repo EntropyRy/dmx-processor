@@ -70,6 +70,7 @@ void dmx_main(dmxdrv_t dmx)
 		const uint8_t *rx_packet = dmxdrv_get_rx_packet(dmx);
 		const size_t rx_length = dmxdrv_get_rx_length(dmx);
 		uint8_t *tx_packet = dmxdrv_get_tx_buffer(dmx);
+		size_t tx_length = DMXDRV_TX_MAX_LEN;
 
 		// Slot 0 is always 0
 		tx_packet[0] = 0;
@@ -83,14 +84,14 @@ void dmx_main(dmxdrv_t dmx)
 		}
 
 		// Set the rest of channels to 0
-		for (size_t i = 5; i < rx_length; i++) {
+		for (size_t i = 5; i < tx_length; i++) {
 			tx_packet[i] = 0;
 		}
 
 		// Mark the receive buffer free when we are done reading it
 		dmxdrv_free_rx_packet(dmx);
 
-		dmxdrv_set_tx_length(dmx, rx_length);
+		dmxdrv_set_tx_length(dmx, tx_length);
 		dmxdrv_start_tx(dmx);
 	}
 }

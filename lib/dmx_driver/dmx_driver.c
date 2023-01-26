@@ -11,8 +11,14 @@ struct dmxdrv {
 	// Position where the receiver is going
 	volatile size_t rx_position;
 
+	// Length of a complete packet in rx_packet
+	volatile size_t rx_length;
+
 	// Add when interrupt-driven TX is implemented
 	//volatile size_t tx_position;
+
+	// Length of data in tx_packet
+	volatile size_t tx_length;
 
 	// rx_packet_in_buffer is used to control access to rx_packet
 	// between interrupts and main loop.
@@ -35,6 +41,9 @@ struct dmxdrv {
 	uint8_t tx_packet[DMXDRV_TX_MAX_LEN];
 };
 
+// Setting rx_position outside of the buffer bounds
+// can be used to abort packet reception.
+#define RX_POSITION_ABORT DMXDRV_RX_MAX_LEN
 
 dmxdrv_t dmxdrv_init(const struct dmxdrv_settings *settings)
 {
@@ -42,6 +51,9 @@ dmxdrv_t dmxdrv_init(const struct dmxdrv_settings *settings)
 	dmxdrv = calloc(1, sizeof(*dmxdrv));
 
 	dmxdrv->settings = *settings;
+	// Prevent reception until the first break condition
+	// to avoid receiving an incomplete packet.
+	dmxdrv->rx_position = RX_POSITION_ABORT;
 
 	// Enable cycle counter to use for some timing
 	dwt_enable_cycle_counter();
@@ -113,15 +125,23 @@ void dmxdrv_usart_isr(dmxdrv_t dmxdrv)
 	size_t rx_position = dmxdrv->rx_position;
 
 	if (flag_fe) {
-		// TODO: check that rx_packet_in_buffer is false
-		// and abort packet reception otherwise.
 		rx_position = 0;
 	} else if (flag_rxne) {
+		if (rx_position == 0) {
+			// If the buffer is already used, skip receiving this packet.
+			if (dmxdrv->rx_packet_in_buffer)
+				rx_position = RX_POSITION_ABORT;
+			// A normal DMX packet starts with 0.
+			// If it's something else, skip the packet.
+			if (data != 0)
+				rx_position = RX_POSITION_ABORT;
+		}
 		if (rx_position < DMXDRV_RX_MAX_LEN) {
 			dmxdrv->rx_packet[rx_position] = data;
 			rx_position += 1;
 			// TODO: support configuring a length shorter than the maximum length?
-			if (rx_position == DMXDRV_RX_MAX_LEN){
+			if (rx_position == DMXDRV_RX_MAX_LEN) {
+				dmxdrv->rx_length = rx_position;
 				dmxdrv->rx_packet_in_buffer = true;
 			}
 		}
@@ -149,9 +169,7 @@ const uint8_t *dmxdrv_get_rx_packet(dmxdrv_t dmxdrv)
 
 size_t dmxdrv_get_rx_length(dmxdrv_t dmxdrv)
 {
-	// TODO: support packets of a different length?
-	(void)dmxdrv; //unused
-	return DMXDRV_RX_MAX_LEN;
+	return dmxdrv->rx_length;
 }
 
 void dmxdrv_free_rx_packet(dmxdrv_t dmxdrv)
@@ -161,6 +179,10 @@ void dmxdrv_free_rx_packet(dmxdrv_t dmxdrv)
 
 bool dmxdrv_tx_buffer_available(dmxdrv_t dmxdrv)
 {
+	// Because transmission is not interrupt-driven for now
+	// and happens completely by busy-waiting in dmxdrv_start_tx,
+	// the buffer is available immediately after dmxdrv_start_tx
+	// returns. This can thus always return true.
 	(void)dmxdrv; //unused
 	return true;
 }
@@ -172,9 +194,7 @@ uint8_t *dmxdrv_get_tx_buffer(dmxdrv_t dmxdrv)
 
 void dmxdrv_set_tx_length(dmxdrv_t dmxdrv, size_t length)
 {
-	// TODO
-	(void)dmxdrv; //unused
-	(void)length; //unused
+	dmxdrv->tx_length = length;
 }
 
 // Simple busy-waiting delay function
@@ -208,9 +228,10 @@ void dmxdrv_start_tx(dmxdrv_t dmxdrv)
 		GPIO_CNF_OUTPUT_ALTFN_PUSHPULL,
 		dmxdrv->settings.tx_pin);
 
+	const size_t tx_length = dmxdrv->tx_length;
 	// Ok, let's forget about interrupt based transmissions for now.
 	// Let's be stupidly inefficient and busy-wait the whole transmission here.
-	for (int i = 0; i < DMXDRV_TX_MAX_LEN; i++) {
+	for (size_t i = 0; i < tx_length; i++) {
 		usart_send_blocking(dmxdrv->settings.usart, dmxdrv->tx_packet[i]);
 	}
 
